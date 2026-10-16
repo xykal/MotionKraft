@@ -50,7 +50,7 @@ jobs:
         run: chmod +x gradlew && ./gradlew assembleDebug
 
       - name: Upload Debug APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: debug-apk
           path: app/build/outputs/apk/debug/*.apk
@@ -136,7 +136,7 @@ jobs:
           cat apk/release/sha256sums.txt
 
       - name: Upload Release Artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-${{ steps.version.outputs.versionName }}-b${{ steps.version.outputs.versionCode }}
           path: |
