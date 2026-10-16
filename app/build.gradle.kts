@@ -21,7 +21,32 @@ android {
         ndk {
             abiFilters += listOf("armeabi-v7a", "arm64-v8a")
         }
-        resourceConfigurations += listOf("en", "in")
+        resourceConfigurations += listOf("en")
+    }
+
+    // Split APK per ABI agar arm64 dan armeabi-v7a jadi file terpisah
+    // (ukuran jauh lebih kecil, pengguna hanya unduh yang cocok dengan device-nya)
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("armeabi-v7a", "arm64-v8a")
+            isUniversalApk = true  // tambahan: satu APK fat untuk distribusi manual
+        }
+    }
+
+    applicationVariants.all {
+        val variant = this
+        variant.outputs.all {
+            val output = this as com.android.build.gradle.internal.api.ApkVariantOutputImpl
+            val base = variant.versionCode
+            output.versionCodeOverride = when (output.getFilter(com.android.build.VariantOutput.ABI)) {
+                "armeabi-v7a" -> base * 10 + 1
+                "arm64-v8a"  -> base * 10 + 2
+                else         -> base * 10 + 0  // universal
+            }
+            output.outputFileName = "MotionKraft-${variant.versionName}-b${variant.versionCode}-${output.getFilter(com.android.build.VariantOutput.ABI) ?: "universal"}.apk"
+        }
     }
 
     signingConfigs {
