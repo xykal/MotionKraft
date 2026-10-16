@@ -13,3 +13,4 @@ build/
 captures/
 keystore/
 local.properties
+.secrets_dump
