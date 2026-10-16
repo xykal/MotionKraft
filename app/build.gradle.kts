@@ -24,7 +24,9 @@ android {
         resourceConfigurations += listOf("en")
     }
 
-    // Split APK per ABI agar arm64 dan armeabi-v7a jadi file terpisah
+    // Split APK per ABI (menghasilkan APK terpisah untuk arm64-v8a dan armeabi-v7a
+    // plus universal APK, masing-masing dengan nama file yang jelas).
+    // Version code per-split diatur otomatis oleh AGP (arm64 offset > armv7 offset > universal).
     splits {
         abi {
             isEnable = true
@@ -34,19 +36,12 @@ android {
         }
     }
 
-    // Map version code per ABI (armeabi-v7a=1, arm64-v8a=2, universal=0)
     applicationVariants.configureEach {
+        val variant = this
         outputs.configureEach {
-            val abiFilter = this.filters.find {
-                it.filterType == com.android.build.VariantOutput.FilterType.ABI.name
-            }
-            val abiCode = when (abiFilter?.identifier) {
-                "armeabi-v7a" -> 1
-                "arm64-v8a"  -> 2
-                else         -> 0
-            }
-            this.versionCodeOverride = (versionCode ?: 1) * 10 + abiCode
-            this.outputFileName = "MotionKraft-$versionName-b${versionCode}-${abiFilter?.identifier ?: "universal"}.apk"
+            val out = this as com.android.build.gradle.internal.api.ApkVariantOutputImpl
+            val abi = out.getFilter(com.android.build.VariantOutput.ABI) ?: "universal"
+            out.outputFileName = "MotionKraft-${variant.versionName}-b${variant.versionCode}-$abi.apk"
         }
     }
 
