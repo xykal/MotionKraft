@@ -1,0 +1,15 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- Left motion streaks -->
+    <path android:fillColor="#C084FC" android:pathData="M16,50 L34,48 L34,52 L16,54 z"/>
+    <path android:fillColor="#C084FC" android:pathData="M14,58 L36,56 L36,60 L14,62 z"/>
+    <path android:fillColor="#C084FC" android:pathData="M18,66 L32,64 L32,68 L18,70 z"/>
+    <!-- The K -->
+    <path android:fillColor="#FFFFFF"
+        android:pathData="M40,32 L50,32 L50,52 L68,32 L80,32 L58,56 L82,84 L70,84 L50,58 L50,84 L40,84 z"/>
+    <path android:fillColor="#EC4899"
+        android:pathData="M50,32 L56,32 L56,52 L68,40 L68,46 L60,58 L68,70 L68,76 L56,64 L56,84 L50,84 z"/>
+    <!-- Accent dot -->
+    <path android:fillColor="#FBBF24" android:pathData="M92,34 a5,5 0 1,0 0.1,0 z"/>
+</vector>

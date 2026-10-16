@@ -50,6 +50,13 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     private val _uiState = MutableStateFlow(EditorUiState())
     val uiState: StateFlow<EditorUiState> = _uiState
 
+    private val _isVip = MutableStateFlow(false)
+    val isVip: StateFlow<Boolean> = _isVip
+
+    val username: String = "MotionKraft User"
+
+    fun setVip(v: Boolean) { _isVip.value = v }
+
     private var playbackJob: Job? = null
 
     init {

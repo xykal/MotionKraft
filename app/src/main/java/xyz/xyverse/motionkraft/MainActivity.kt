@@ -18,7 +18,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import xyz.xyverse.motionkraft.presentation.EditorViewModel
-import xyz.xyverse.motionkraft.presentation.MotionKraftAppScreen
+import xyz.xyverse.motionkraft.presentation.MotionKraftRoot
 import xyz.xyverse.motionkraft.ui.theme.MotionKraftTheme
 import java.io.File
 
@@ -51,7 +51,7 @@ class MainActivity : ComponentActivity() {
             MotionKraftTheme {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     val vm: EditorViewModel = viewModel()
-                    MotionKraftAppScreen(
+                    MotionKraftRoot(
                         onPickMedia = { pickMedia.launch(
                             androidx.activity.result.PickVisualMediaRequest(
                                 ActivityResultContracts.PickVisualMedia.VideoOnly

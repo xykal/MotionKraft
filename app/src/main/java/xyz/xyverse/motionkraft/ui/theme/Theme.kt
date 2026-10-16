@@ -1,51 +1,36 @@
 package xyz.xyverse.motionkraft.ui.theme
 
-import android.os.Build
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 
 private val DarkColorScheme = darkColorScheme(
-    primary = Color(0xFF6366F1),
-    secondary = Color(0xFFEC4899),
-    tertiary = Color(0xFF14B8A6),
-    background = Color(0xFF0B0B12),
-    surface = Color(0xFF15151F),
-    surfaceVariant = Color(0xFF1E1E2E),
+    primary = Color(0xFF8B5CF6),
     onPrimary = Color.White,
-    onSecondary = Color.White,
-    onBackground = Color.White,
-    onSurface = Color.White
-)
-
-private val LightColorScheme = lightColorScheme(
-    primary = Color(0xFF6366F1),
+    primaryContainer = Color(0xFF6D28D9),
+    onPrimaryContainer = Color.White,
     secondary = Color(0xFFEC4899),
-    tertiary = Color(0xFF14B8A6),
-    background = Color(0xFFF8F9FC),
-    surface = Color.White,
-    onPrimary = Color.White,
     onSecondary = Color.White,
-    onBackground = Color(0xFF1A1A2E),
-    onSurface = Color(0xFF1A1A2E)
+    tertiary = Color(0xFF22D3EE),
+    onTertiary = Color(0xFF0B0B12),
+    background = Color(0xFF08060F),
+    onBackground = Color(0xFFF5F3FF),
+    surface = Color(0xFF140F2C),
+    onSurface = Color(0xFFF5F3FF),
+    surfaceVariant = Color(0xFF1C1542),
+    onSurfaceVariant = Color(0xFFC4B5FD),
+    outline = Color(0xFF2D2266),
+    error = Color(0xFFEF4444)
 )
 
 @Composable
 fun MotionKraftTheme(
-    darkTheme: Boolean = true, // Default dark untuk editing seperti CapCut/AM
+    darkTheme: Boolean = true,
     content: @Composable () -> Unit
 ) {
-    val colorScheme = when {
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && darkTheme -> dynamicDarkColorScheme(LocalContext.current)
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !darkTheme -> dynamicLightColorScheme(LocalContext.current)
-        darkTheme -> DarkColorScheme
-        else -> LightColorScheme
-    }
-
+    // Selalu pakai purple theme kita, tidak pakai dynamic color Android
     MaterialTheme(
-        colorScheme = colorScheme,
+        colorScheme = DarkColorScheme,
         typography = Typography(),
         content = content
     )

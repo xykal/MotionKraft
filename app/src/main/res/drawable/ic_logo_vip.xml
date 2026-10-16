@@ -1,0 +1,21 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="160dp" android:height="160dp"
+    android:viewportWidth="160" android:viewportHeight="160">
+    <!-- VIP crown version: gold-purple gradient -->
+    <path android:fillColor="#7C3AED" android:pathData="M80,20 a60,60 0 1,0 0.1,0 z"/>
+    <path android:fillColor="#A855F7" android:pathData="M80,28 a52,52 0 1,0 0.1,0 z"/>
+    <!-- Crown top -->
+    <path android:fillColor="#FBBF24" android:pathData="M38,46 L50,58 L66,42 L80,60 L94,42 L110,58 L122,46 L120,72 L40,72 z"/>
+    <path android:fillColor="#F59E0B" android:pathData="M40,72 L120,72 L120,78 L40,78 z"/>
+    <path android:fillColor="#DC2626" android:pathData="M76,50 a4,4 0 1,0 0.1,0 z"/>
+    <path android:fillColor="#10B981" android:pathData="M58,50 a4,4 0 1,0 0.1,0 z"/>
+    <path android:fillColor="#3B82F6" android:pathData="M94,50 a4,4 0 1,0 0.1,0 z"/>
+    <!-- Inner dark panel -->
+    <path android:fillColor="#1E1B4B" android:pathData="M36,80 a44,44 0 1,0 88,0 z"/>
+    <!-- MotionKraft K white -->
+    <path android:fillColor="#FFFFFF"
+        android:pathData="M62,88 L74,88 L74,108 L96,88 L110,88 L86,114 L112,138 L98,138 L74,116 L74,138 L62,138 z"/>
+    <!-- VIP banner -->
+    <path android:fillColor="#FBBF24" android:pathData="M54,148 L106,148 L106,156 L54,156 z"/>
+    <path android:fillColor="#92400E" android:pathData="M64,150 L96,150 L96,154 L64,154 z"/>
+</vector>
