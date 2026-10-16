@@ -212,7 +212,10 @@ jobs:
           draft: true
           prerelease: false
           body_path: RELEASE_NOTES.md
-          files: release-artifacts/*
+          files: |
+            release-flat/*.apk
+            release-flat/*.aab
+            release-flat/sha256sums.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
