@@ -9,7 +9,7 @@ android {
 
     defaultConfig {
         applicationId = "xyz.xyverse.motionkraft"
-        minSdk = 24
+        minSdk = 26
         targetSdk = 34
         versionCode = System.getenv("BUILD_NUMBER")?.toIntOrNull() ?: 1
         versionName = System.getenv("VERSION_NAME") ?: "1.0.0"
