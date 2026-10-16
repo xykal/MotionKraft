@@ -327,14 +327,16 @@ fun ClipStrip(clip: VideoClip, width: Float, isSelected: Boolean, onClick: () ->
 
 @Composable
 fun BottomToolBar(vm: EditorViewModel, state: EditorUiState) {
+    data class ToolDef(val label: String, val icon: androidx.compose.ui.graphics.vector.ImageVector)
+
     val tools = listOf(
-        BottomPanel.EFFECTS to Triple("Effects", Icons.Default.AutoAwesome),
-        BottomPanel.COLOR to Triple("Filters", Icons.Default.Palette),
-        BottomPanel.TRANSFORM to Triple("Transform", Icons.Default.Transform),
-        BottomPanel.TEXT to Triple("Text", Icons.Default.Title),
-        BottomPanel.TRANSITION to Triple("Transition", Icons.Default.SwitchVideo),
-        BottomPanel.SPEED to Triple("Speed", Icons.Default.Speed),
-        BottomPanel.AUDIO to Triple("Audio", Icons.Default.MusicNote)
+        BottomPanel.EFFECTS to ToolDef("Effects", Icons.Default.AutoAwesome),
+        BottomPanel.COLOR to ToolDef("Filters", Icons.Default.Palette),
+        BottomPanel.TRANSFORM to ToolDef("Transform", Icons.Default.Transform),
+        BottomPanel.TEXT to ToolDef("Text", Icons.Default.Title),
+        BottomPanel.TRANSITION to ToolDef("Transition", Icons.Default.SwitchVideo),
+        BottomPanel.SPEED to ToolDef("Speed", Icons.Default.Speed),
+        BottomPanel.AUDIO to ToolDef("Audio", Icons.Default.MusicNote)
     )
 
     Surface(tonalElevation = 8.dp) {
@@ -345,8 +347,11 @@ fun BottomToolBar(vm: EditorViewModel, state: EditorUiState) {
                 .padding(vertical = 8.dp),
             horizontalArrangement = Arrangement.SpaceEvenly
         ) {
-            items(tools) { (panel, triple) ->
-                val (label, icon) = triple
+            items(tools) { entry ->
+                val panel = entry.first
+                val def = entry.second
+                val label = def.label
+                val icon = def.icon
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier

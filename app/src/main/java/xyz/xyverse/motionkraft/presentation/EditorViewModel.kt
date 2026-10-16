@@ -185,9 +185,9 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
                     }, { log ->
                         // Bisa parse log untuk progress (time=...)
                     }, { statistics ->
-                        val time = statistics.time
+                        val time = statistics.time.toFloat()
                         val total = project.timeline.getTotalDuration() / 1000f
-                        if (total > 0) {
+                        if (total > 0f) {
                             _uiState.update { it.copy(exportProgress = (time / total).coerceIn(0f, 1f)) }
                         }
                     })
