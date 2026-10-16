@@ -309,7 +309,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
                 }
             } else {
                 _uiState.update {
-                    it.copy(isExporting = false, lastError = "Export failed (code ${result?.codeValue}).")
+                    it.copy(isExporting = false, lastError = "Export failed (code ${result?.toString()}).")
                 }
             }
         }
