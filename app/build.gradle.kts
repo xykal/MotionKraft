@@ -100,7 +100,7 @@ dependencies {
     implementation("androidx.media3:media3-common:1.2.1")
     implementation("androidx.media3:media3-transformer:1.2.1")
 
-    implementation("com.arthenica:ffmpeg-kit-full:6.0-2")
+    implementation("dev.ffmpegkit-maintained:ffmpeg-kit-full:8.1.7")
 
     implementation("io.coil-kt:coil-compose:2.5.0")
 

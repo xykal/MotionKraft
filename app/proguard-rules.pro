@@ -1,11 +1,11 @@
 # Keep core runtime
 -keepattributes *Annotation*, Signature, InnerClasses, EnclosingMethod
 
-# FFmpeg Kit - native libs
+# FFmpeg Kit - native libs (maintained fork)
 -keep class com.arthenica.ffmpegkit.** { *; }
 -keep class com.arthenica.smartexception.** { *; }
 -dontwarn com.arthenica.**
--dontwarn com.github.hiteshsondhi88.**
+-dontwarn dev.ffmpegkit-maintained.**
 
 # Media3 / ExoPlayer
 -keep class androidx.media3.** { *; }
