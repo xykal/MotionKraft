@@ -166,11 +166,11 @@ fun HomeScreen(
         SectionHeader("Project Terakhir")
         Spacer(Modifier.height(4.dp))
         LazyRow(contentPadding = PaddingValues(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            items((0..4).map { i ->
+            items((0..4).toList()) { i ->
                 val titles = listOf("Jedag jedug", "Cinematic", "Reels", "Short", "Lyrics")
                 val colors = listOf(Mk.purple, Mk.pink, Mk.cyan, Mk.gold, Color(0xFF334155))
-                Triple("Project ${i+1}", titles[i], colors[i])
-            }) { (t, sub, c) ->
+                val t = "Project ${i+1}"; val sub = titles[i]; val c = colors[i]
+                
                 ProjectCard(t, sub, "0:${15+i}", listOf(c, c.copy(alpha = 0.5f))) {}
             }
         }

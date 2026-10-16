@@ -324,17 +324,17 @@ private fun MkTimeline(vm: EditorViewModel, state: EditorUiState, onAdd: () -> U
         Column(Modifier.fillMaxWidth()) {
             Row(Modifier.fillMaxWidth().height(32.dp).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = { vm.applyZoom(0.85f) }, Modifier.size(28.dp)) { Icon(Icons.Default.ZoomOut, null, tint = Mk.dim, Modifier.size(16.dp)) }
+                    IconButton(onClick = { vm.applyZoom(0.85f) }, Modifier.size(28.dp)) { Icon(Icons.Default.ZoomOut, null, Modifier.size(16.dp), tint = Mk.dim) }
                     Text("${(state.zoomLevel*100).toInt()}%", color = Mk.dim, fontSize = 10.sp, modifier = Modifier.width(34.dp), textAlign = TextAlign.Center)
-                    IconButton(onClick = { vm.applyZoom(1.18f) }, Modifier.size(28.dp)) { Icon(Icons.Default.ZoomIn, null, tint = Mk.dim, Modifier.size(16.dp)) }
+                    IconButton(onClick = { vm.applyZoom(1.18f) }, Modifier.size(28.dp)) { Icon(Icons.Default.ZoomIn, null, Modifier.size(16.dp), tint = Mk.dim) }
                 }
                 Spacer(Modifier.weight(1f))
                 Text("TIMELINE", color = Mk.dim, fontSize = 10.sp, fontWeight = FontWeight.Black, letterSpacing = 1.sp)
                 Spacer(Modifier.weight(1f))
-                IconButton(onClick = { vm.updatePlayhead(0) }, Modifier.size(28.dp)) { Icon(Icons.Default.SkipPrevious, null, tint = Mk.dim, Modifier.size(16.dp)) }
+                IconButton(onClick = { vm.updatePlayhead(0) }, Modifier.size(28.dp)) { Icon(Icons.Default.SkipPrevious, null, Modifier.size(16.dp), tint = Mk.dim) }
                 IconButton(onClick = onAdd, Modifier.size(28.dp)) {
                     Box(Modifier.size(22.dp).clip(CircleShape).background(Brush.linearGradient(listOf(Mk.purple, Mk.pink))), contentAlignment = Alignment.Center) {
-                        Icon(Icons.Default.Add, null, tint = Color.White, Modifier.size(16.dp))
+                        Icon(Icons.Default.Add, null, Modifier.size(16.dp), tint = Color.White)
                     }
                 }
             }
@@ -582,7 +582,7 @@ private fun SheetRow(icon: ImageVector, title: String, sub: String, brush: Brush
             Text(title, color = Mk.text, fontSize = 14.sp, fontWeight = FontWeight.Bold)
             Text(sub, color = Mk.dim, fontSize = 11.sp)
         }
-        Icon(Icons.Default.ChevronRight, null, tint = Mk.dim, Modifier.size(18.dp))
+        Icon(Icons.Default.ChevronRight, null, Modifier.size(18.dp), tint = Mk.dim)
     }
 }
 
