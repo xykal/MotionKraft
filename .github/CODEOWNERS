@@ -1,0 +1,5 @@
+# Semua perubahan ke workflow dan konfigurasi signing harus di-review oleh owner
+/.github/workflows/  @xykal
+*.gradle.kts        @xykal
+/keystore/          @xykal
+/app/proguard-*     @xykal

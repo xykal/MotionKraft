@@ -1,0 +1,7 @@
+*.keystore binary
+*.jks binary
+*.p12 binary
+*.apk binary
+*.aab binary
+*.png binary
+*.so binary

@@ -1,0 +1,15 @@
+*.aab
+*.apk
+*.iml
+*.jks
+*.p12
+.cxx/
+.externalNativeBuild/
+.gradle/
+.idea/
+.secrets_dump
+branding/icon_source.png
+build/
+captures/
+keystore/
+local.properties
