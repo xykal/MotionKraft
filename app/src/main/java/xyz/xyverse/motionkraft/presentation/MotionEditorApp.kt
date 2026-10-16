@@ -669,7 +669,7 @@ private fun ExportPanel(vm: EditorViewModel, state: EditorUiState) {
 
 // ---------- Reusable small components ----------
 @Composable
-private fun LabeledSlider(label: String, value: Float, range: ClosedFloatingPoint<Float>, onValue: (Float) -> Unit) {
+private fun LabeledSlider(label: String, value: Float, range: ClosedFloatingPointRange<Float>, onValue: (Float) -> Unit) {
     Column {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(label, color = MkColors.text, fontSize = 12.sp)
