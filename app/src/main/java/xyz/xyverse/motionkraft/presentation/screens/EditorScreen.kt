@@ -575,7 +575,7 @@ private fun AddSheet(onDismiss: () -> Unit, onVideo: () -> Unit, onImage: () -> 
 private fun SheetRow(icon: ImageVector, title: String, sub: String, brush: Brush, onClick: () -> Unit) {
     Row(Modifier.fillMaxWidth().clickable { onClick() }.padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)).background(brush), contentAlignment = Alignment.Center) {
-            Icon(icon, null, tint = Color.White, Modifier.size(22.dp))
+            Icon(icon, null, Modifier.size(22.dp), tint = Color.White)
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
