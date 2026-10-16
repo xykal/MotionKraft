@@ -67,7 +67,7 @@ jobs:
     environment: production
     steps:
       - name: Verify actor
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             if (context.actor !== 'xykal') {
