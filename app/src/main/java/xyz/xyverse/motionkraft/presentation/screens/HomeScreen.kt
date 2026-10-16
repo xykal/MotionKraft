@@ -25,6 +25,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -165,9 +166,10 @@ fun HomeScreen(
         SectionHeader("Project Terakhir")
         Spacer(Modifier.height(4.dp))
         LazyRow(contentPadding = PaddingValues(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            items(List(5) { i ->
-                Triple("Project ${i+1}", listOf("Jedag jedug", "Cinematic", "Reels", "Short", "Lyrics")[i],
-                    listOf(Mk.purple, Mk.pink, Mk.cyan, Mk.gold, Color(0xFF334155))[i])
+            items((0..4).map { i ->
+                val titles = listOf("Jedag jedug", "Cinematic", "Reels", "Short", "Lyrics")
+                val colors = listOf(Mk.purple, Mk.pink, Mk.cyan, Mk.gold, Color(0xFF334155))
+                Triple("Project ${i+1}", titles[i], colors[i])
             }) { (t, sub, c) ->
                 ProjectCard(t, sub, "0:${15+i}", listOf(c, c.copy(alpha = 0.5f))) {}
             }

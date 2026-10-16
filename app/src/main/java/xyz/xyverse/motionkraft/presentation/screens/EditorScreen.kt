@@ -338,7 +338,7 @@ private fun MkTimeline(vm: EditorViewModel, state: EditorUiState, onAdd: () -> U
                     }
                 }
             }
-            androidx.compose.foundation.layout.Divider(color = Mk.line, thickness = 0.5.dp)
+            Box(Modifier.fillMaxWidth().height(0.5.dp).background(Mk.line))
 
             Box(Modifier.fillMaxWidth().height(rulerH + trackH * trackCount + 6.dp)
                 .pointerInput(Unit) { detectTransformGestures { _, _, z, _ -> vm.applyZoom(z) } }) {
@@ -361,7 +361,7 @@ private fun MkTimeline(vm: EditorViewModel, state: EditorUiState, onAdd: () -> U
                                 }
                             }
                         }
-                        androidx.compose.foundation.layout.Divider(color = Mk.line, thickness = 0.5.dp)
+                        Box(Modifier.fillMaxWidth().height(0.5.dp).background(Mk.line))
                         for (track in 0 until trackCount) {
                             Row(Modifier.fillMaxWidth().height(trackH).background(if (track%2==0) Mk.bg2 else Mk.bg)) {
                                 val clips = state.project.timeline.clips.filter { it.track == track }.sortedBy { it.startTimeUs }
@@ -373,7 +373,7 @@ private fun MkTimeline(vm: EditorViewModel, state: EditorUiState, onAdd: () -> U
                                     cursor = c.endTimeUs
                                 }
                             }
-                            androidx.compose.foundation.layout.Divider(color = Mk.line, thickness = 0.5.dp)
+                            Box(Modifier.fillMaxWidth().height(0.5.dp).background(Mk.line))
                         }
                     }
                 }
@@ -421,7 +421,7 @@ private fun EffectsInspector(vm: EditorViewModel, state: EditorUiState, vip: Boo
     // categories
     var cat by remember { mutableStateOf("JJ") }
     val cats = listOf("JJ" to JedagJedugPresets.ALL_EFFECTS.filter { it.category == EffectCategory.JJEDAG_JEDUG },
-        "Filter" to JedagJedugPresets.ALL_EFFECTS.filter { it.category == EffectCategory.FILTER },
+        "Filter" to JedagJedugPresets.ALL_EFFECTS.filter { it.category in listOf(EffectCategory.STYLIZE, EffectCategory.BLUR, EffectCategory.COLOR, EffectCategory.GLOW, EffectCategory.DISTORT) },
         "Cine3D" to List(4) { JedagJedugPresets.ALL_EFFECTS[it % JedagJedugPresets.ALL_EFFECTS.size] },
         "Morph" to List(3) { JedagJedugPresets.ALL_EFFECTS[it] },
         "Graph" to List(3) { JedagJedugPresets.ALL_EFFECTS[it] }
