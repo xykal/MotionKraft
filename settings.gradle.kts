@@ -11,7 +11,7 @@ dependencyResolutionManagement {
         google()
         mavenCentral()
         maven { url = uri("https://jitpack.io") }
-        maven { url = uri("https://maven.arthenica.org") }
+        maven { url = uri("https://maven.arthenica.com/public/") }
     }
 }
 
