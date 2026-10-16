@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -230,7 +231,7 @@ fun TimelineView(vm: EditorViewModel, state: EditorUiState) {
             .background(MaterialTheme.colorScheme.background)
             .pointerInput(Unit) {
                 detectTransformGestures { _, _, zoom, _ ->
-                    vm.updateZoom(zoom)
+                    vm.applyZoom(zoom)
                 }
             }
     ) {
@@ -546,7 +547,7 @@ fun ExportPanel(vm: EditorViewModel, state: EditorUiState) {
     Column(modifier = Modifier.padding(16.dp).verticalScroll(rememberScrollState())) {
         Text("Export Video", fontWeight = FontWeight.Bold, fontSize = 18.sp)
         Spacer(Modifier.height(8.dp))
-        Text("Resolusi: ${ex.width}x${ex.height}")
+        Text("Resolution: ${ex.width}x${ex.height}")
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf(720 to 1280, 1080 to 1920, 1440 to 2560, 2160 to 3840).forEach { (w, h) ->
                 FilterChip(
@@ -617,7 +618,8 @@ fun formatTimeUs(us: Long): String {
     return String.format("%02d:%02d.%02d", minutes, seconds, ms)
 }
 
-fun EditorViewModel.updateZoom(zoom: Float) {
-    val newZoom = (_uiState.value.zoomLevel * zoom).coerceIn(0.5f, 5f)
-    _uiState.update { it.copy(zoomLevel = newZoom) }
+fun EditorViewModel.applyZoom(factor: Float) {
+    val current = uiState.value.zoomLevel
+    val newZoom = (current * factor).coerceIn(0.5f, 5f)
+    setZoom(newZoom)
 }

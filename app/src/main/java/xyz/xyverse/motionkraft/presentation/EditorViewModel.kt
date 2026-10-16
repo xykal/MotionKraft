@@ -218,4 +218,8 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     fun undoError() {
         _uiState.update { it.copy(lastError = null) }
     }
+
+    fun setZoom(value: Float) {
+        _uiState.update { it.copy(zoomLevel = value) }
+    }
 }
