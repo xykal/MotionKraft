@@ -172,13 +172,23 @@ jobs:
 
       - name: Create GitHub Release (on tag)
         if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v1
         with:
           name: MotionKraft v${{ steps.version.outputs.versionName }}
           draft: true
           prerelease: false
           generate_release_notes: true
-          body_path: .github/RELEASE_TEMPLATE.md
+          body: |
+            ## MotionKraft v${{ steps.version.outputs.versionName }}
+
+            **Install**
+            1. Download `app-release.apk`
+            2. Allow installation from unknown sources when prompted
+            3. Verify the SHA256 checksum matches `sha256sums.txt`
+
+            Minimum Android: 7.0 (API 24)
+            Architectures: arm64-v8a, armeabi-v7a
+            Signed with official MotionKraft release key
           files: |
             app/build/outputs/apk/release/*.apk
             app/build/outputs/apk/release/sha256sums.txt
@@ -192,7 +202,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Scan for leaked secrets in repo
-        uses: trufflesecurity/trufflehog@main
+        uses: trufflesecurity/trufflehog@v3.88.0
         with:
           path: ./
           base: ${{ github.event.repository.default_branch }}
