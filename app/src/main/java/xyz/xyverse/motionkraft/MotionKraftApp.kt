@@ -6,6 +6,16 @@ import android.app.NotificationManager
 import android.os.Build
 
 class MotionKraftApp : Application() {
+
+    data class PendingImport(
+        val path: String,
+        val isVideo: Boolean,
+        val durationUs: Long
+    )
+
+    @Volatile
+    var pendingImport: PendingImport? = null
+
     companion object {
         const val CHANNEL_EXPORT = "export_channel"
     }
@@ -17,11 +27,8 @@ class MotionKraftApp : Application() {
                 CHANNEL_EXPORT,
                 "Export Video",
                 NotificationManager.IMPORTANCE_LOW
-            ).apply {
-                description = "Notifikasi saat mengexport video"
-            }
-            val nm = getSystemService(NotificationManager::class.java)
-            nm.createNotificationChannel(channel)
+            ).apply { description = "Video export progress" }
+            getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
         }
     }
 }
