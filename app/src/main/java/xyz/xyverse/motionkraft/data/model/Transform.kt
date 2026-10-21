@@ -1,86 +1,95 @@
 package xyz.xyverse.motionkraft.data.model
 
+import kotlin.math.PI
+import kotlin.math.sin
+
 /**
- * Menyimpan data transformasi 2D untuk sebuah klip pada satu waktu.
- * Semua animasi (jedag jedug, zoom, geser) menggunakan keyframe di property ini.
+ * 2D transform of a clip. Every property is a list of keyframes whose times are
+ * measured from the start of the clip on the timeline. One keyframe means a constant.
+ * Position: canvas pixels from the centre. Scale: factor (1 = 100%). Rotation: degrees,
+ * clockwise. Opacity: 0..1.
  */
 data class Transform(
-    // Posisi (pixels relatif terhadap center)
-    val positionX: List<Keyframe> = listOf(Keyframe(0L, 0f)),
-    val positionY: List<Keyframe> = listOf(Keyframe(0L, 0f)),
-
-    // Skala (1.0f = normal, 2.0f = 2x zoom)
-    val scaleX: List<Keyframe> = listOf(Keyframe(0L, 1f)),
-    val scaleY: List<Keyframe> = listOf(Keyframe(0L, 1f)),
-
-    // Rotasi (derajat)
-    val rotation: List<Keyframe> = listOf(Keyframe(0L, 0f)),
-
-    // Opacity (0 = transparan, 1 = opaque)
-    val opacity: List<Keyframe> = listOf(Keyframe(0L, 1f)),
-
-    // Anchor point (normalized 0-1, default center)
-    val anchorX: Float = 0.5f,
-    val anchorY: Float = 0.5f
+    val positionX: List<Keyframe> = Transform.constant(0f),
+    val positionY: List<Keyframe> = Transform.constant(0f),
+    val scaleX: List<Keyframe> = Transform.constant(1f),
+    val scaleY: List<Keyframe> = Transform.constant(1f),
+    val rotation: List<Keyframe> = Transform.constant(0f),
+    val opacity: List<Keyframe> = Transform.constant(1f)
 ) {
-    fun getValueAt(property: TransformProperty, timeUs: Long): Float {
-        val keys = when (property) {
-            TransformProperty.POSITION_X -> positionX
-            TransformProperty.POSITION_Y -> positionY
-            TransformProperty.SCALE_X -> scaleX
-            TransformProperty.SCALE_Y -> scaleY
-            TransformProperty.ROTATION -> rotation
-            TransformProperty.OPACITY -> opacity
-        }
-        return interpolate(keys, timeUs)
+    fun keys(property: TransformProperty): List<Keyframe> = when (property) {
+        TransformProperty.POSITION_X -> positionX
+        TransformProperty.POSITION_Y -> positionY
+        TransformProperty.SCALE_X -> scaleX
+        TransformProperty.SCALE_Y -> scaleY
+        TransformProperty.ROTATION -> rotation
+        TransformProperty.OPACITY -> opacity
     }
 
-    private fun interpolate(keys: List<Keyframe>, timeUs: Long): Float {
-        if (keys.isEmpty()) return 0f
-        if (keys.size == 1) return keys[0].value
-        val sorted = keys.sortedBy { it.timeUs }
-        if (timeUs <= sorted.first().timeUs) return sorted.first().value
-        if (timeUs >= sorted.last().timeUs) return sorted.last().value
+    fun valueAt(property: TransformProperty, timeUs: Long): Float = sample(keys(property), timeUs)
 
-        // Temukan dua keyframe yang mengapit timeUs
-        for (i in 0 until sorted.size - 1) {
-            val a = sorted[i]
-            val b = sorted[i + 1]
-            if (timeUs in a.timeUs..b.timeUs) {
-                val t = (timeUs - a.timeUs).toFloat() / (b.timeUs - a.timeUs).toFloat()
-                return interpolateValue(a.value, b.value, t, a.interpolation)
+    /** Copy where [property] is a single constant value (removes its animation). */
+    fun withConstant(property: TransformProperty, value: Float): Transform {
+        val k = constant(value)
+        return when (property) {
+            TransformProperty.POSITION_X -> copy(positionX = k)
+            TransformProperty.POSITION_Y -> copy(positionY = k)
+            TransformProperty.SCALE_X -> copy(scaleX = k)
+            TransformProperty.SCALE_Y -> copy(scaleY = k)
+            TransformProperty.ROTATION -> copy(rotation = k)
+            TransformProperty.OPACITY -> copy(opacity = k)
+        }
+    }
+
+    companion object {
+        fun constant(value: Float): List<Keyframe> = listOf(Keyframe(0L, value))
+
+        /** Value of an animated property at [timeUs]. Holds the ends, interpolates between keys. */
+        fun sample(keys: List<Keyframe>, timeUs: Long): Float {
+            if (keys.isEmpty()) return 0f
+            val s = keys.sortedBy { it.timeUs }
+            if (timeUs <= s.first().timeUs) return s.first().value
+            if (timeUs >= s.last().timeUs) return s.last().value
+            for (i in 0 until s.size - 1) {
+                val a = s[i]
+                val b = s[i + 1]
+                if (timeUs < a.timeUs || timeUs >= b.timeUs) continue
+                if (a.interpolation == Interpolation.HOLD) return a.value
+                val span = (b.timeUs - a.timeUs).coerceAtLeast(1L)
+                val t = (timeUs - a.timeUs).toFloat() / span
+                return a.value + (b.value - a.value) * ease(a.interpolation, t)
             }
+            return s.last().value
         }
-        return sorted.last().value
-    }
 
-    private fun interpolateValue(a: Float, b: Float, t: Float, type: Interpolation): Float {
-        val eased = when (type) {
-            Interpolation.LINEAR -> t
+        /** Easing curve: maps progress t in 0..1 to eased progress. */
+        fun ease(type: Interpolation, t: Float): Float = when (type) {
+            Interpolation.LINEAR, Interpolation.HOLD -> t
             Interpolation.EASE_IN -> t * t * t
             Interpolation.EASE_OUT -> 1f - (1f - t) * (1f - t) * (1f - t)
-            Interpolation.EASE_IN_OUT -> {
-                if (t < 0.5f) 4f * t * t * t else 1f - (-2f * t + 2f).let { it * it * it } / 2f
-            }
-            Interpolation.HOLD -> 0f
-            Interpolation.BOUNCE -> {
-                val n1 = 7.5625f; val d1 = 2.75f
-                when {
-                    t < 1f/d1 -> n1 * t * t
-                    t < 2f/d1 -> n1 * (t - 1.5f/d1).let { it * it } + 0.75f
-                    t < 2.5f/d1 -> n1 * (t - 2.25f/d1).let { it * it } + 0.9375f
-                    else -> n1 * (t - 2.625f/d1).let { it * it } + 0.984375f
-                }
-            }
-            Interpolation.ELASTIC -> {
-                val p = 0.3f
-                val s = p / 4f
-                val t2 = t - 1f
-                -(Math.pow(2.0, (10f * t2).toDouble()).toFloat()) *
-                        Math.sin(((t2 - s) * (2f * Math.PI) / p).toDouble()).toFloat() + 1f
+            Interpolation.EASE_IN_OUT ->
+                if (t < 0.5f) 4f * t * t * t else 1f - (2f - 2f * t) * (2f - 2f * t) * (2f - 2f * t) / 2f
+            Interpolation.BOUNCE -> bounceOut(t)
+            Interpolation.ELASTIC -> elasticOut(t)
+        }
+
+        private fun bounceOut(t: Float): Float {
+            val n1 = 7.5625f
+            val d1 = 2.75f
+            return when {
+                t < 1f / d1 -> n1 * t * t
+                t < 2f / d1 -> { val x = t - 1.5f / d1; n1 * x * x + 0.75f }
+                t < 2.5f / d1 -> { val x = t - 2.25f / d1; n1 * x * x + 0.9375f }
+                else -> { val x = t - 2.625f / d1; n1 * x * x + 0.984375f }
             }
         }
-        return a + (b - a) * eased
+
+        private fun elasticOut(t: Float): Float {
+            if (t <= 0f) return 0f
+            if (t >= 1f) return 1f
+            val decay = Math.pow(2.0, (-10.0 * t)).toFloat()
+            return decay * sin((t * 10f - 0.75f) * (2f * PI.toFloat() / 3f)) + 1f
+        }
     }
 }
 
