@@ -12,9 +12,11 @@ Repository: [https://github.com/xykal/MotionKraft](https://github.com/xykal/Moti
 
 ## Status
 
-Active development. Current build provides a working foundation: multi-track timeline, six-channel keyframe animation, beat-aware jedag-jedug presets, color grading, text layers, speed ramps, and FFmpeg export up to 4K H.264/AAC.
+Working editor: multi-track timeline, keyframed transforms, jedag-jedug presets, colour and effects, text layers, and FFmpeg export to H.264 and AAC. Projects are saved on the device.
 
-Minimum Android: 7.0 (API 24)
+Not yet implemented: undo and redo, audio waveforms, custom fonts, and animated opacity in exports (opacity keyframes are preview-only).
+
+Minimum Android: 8.0 (API 26)
 Target SDK: 34
 Architectures: arm64-v8a, armeabi-v7a
 
@@ -23,45 +25,27 @@ Architectures: arm64-v8a, armeabi-v7a
 ## Features
 
 ### Timeline
-- Multi-track tracks for video, image, and text clips
-- Pinch-zoomable timeline ruler
-- Per-clip trim and speed (0.1x to 4x)
-- Layer ordering by track index
-- FFmpeg filter graph for frame-accurate export
+- Video, photo, and text clips on stacked tracks
+- Tap a clip to select it, drag it to move it, tap or drag the ruler to scrub
+- Split at the playhead, duplicate, delete
+- Speed from 0.5x to 2x (audio follows the speed)
 
-### Animation
-- Keyframe channels: position X/Y, scale X/Y, rotation, opacity
-- Interpolation modes: linear, ease-in, ease-out, ease-in-out, hold, bounce, elastic
-- All beat presets produce editable keyframes rather than burnt-in pixels
+### Transform and Motion
+- Position, scale, rotation, and opacity, stored as keyframes
+- Jedag-jedug presets (zoom punch, heavy shake, pulse, earthquake, whip pan, spin, RGB glitch) generate keyframes from BPM and intensity, and stay editable
+- Preview and export use the same timing rules. Bounce and elastic easings export as linear.
 
-### Beat-Synced Effects (one tap)
-- Zoom Punch
-- Heavy Shake
-- Strobe Flash
-- RGB Glitch
-- Whip Pan transition
-- Spin 360
-- Pulse (BPM-locked scale)
-- Earthquake (shake plus punch composite)
-- Zoom Blur
-
-### Color and Visual Adjustment
-- Brightness, contrast, saturation sliders
-- Vintage, black-and-white, teal-orange cinematic filters
-- Gaussian blur and outer glow
+### Look
+- Brightness, contrast, saturation, volume
+- Effects: vintage, black and white, cinematic, blur, RGB glitch
 
 ### Text
-- Solid-fill text layers with outline stroke
-- Adjustable size and color
-- Custom font loading scheduled for next milestone
+- Text layers with size, colour, and outline
 
 ### Export
-- Resolutions: 720p, 1080p, 1440p, 2160p
-- Frame rates: 24 / 30 / 60 fps
-- Bitrate: 4 to 50 Mbps
-- Codec: H.264 video, AAC audio
-- Output written to the device `Movies/MotionKraft` directory and registered with MediaStore
-- Foreground export service with progress notification
+- Canvas size is chosen on the start screen (9:16, 16:9, or 1:1)
+- H.264 video, AAC audio, runs as a foreground service with progress and cancel
+- Saved to `Movies/MotionKraft` and added to the gallery
 
 ---
 
