@@ -1,345 +1,373 @@
 package xyz.xyverse.motionkraft.presentation
 
 import android.app.Application
-import android.content.ContentValues
 import android.net.Uri
-import android.os.Environment
-import android.os.Handler
-import android.os.Looper
-import android.provider.MediaStore
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.arthenica.ffmpegkit.FFmpegKit
-import com.arthenica.ffmpegkit.ReturnCode
-import xyz.xyverse.motionkraft.MotionKraftApp
-import xyz.xyverse.motionkraft.data.model.*
-import xyz.xyverse.motionkraft.editor.FFmpegCommandBuilder
-import xyz.xyverse.motionkraft.effects.JedagJedugApplier
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import xyz.xyverse.motionkraft.R
+import xyz.xyverse.motionkraft.data.ProjectStore
+import xyz.xyverse.motionkraft.data.model.*
+import xyz.xyverse.motionkraft.editor.ExportService
+import xyz.xyverse.motionkraft.editor.ExportState
+import xyz.xyverse.motionkraft.editor.FFmpegCommandBuilder
+import xyz.xyverse.motionkraft.editor.MediaImporter
+import xyz.xyverse.motionkraft.effects.JedagJedugApplier
 import java.io.File
+import java.util.UUID
 
-data class EditorUiState(
-    val project: MographProject = MographProject(name = "Project ${System.currentTimeMillis() / 1000}"),
-    val selectedClipId: String? = null,
-    val currentPlayheadUs: Long = 0L,
-    val isPlaying: Boolean = false,
-    val isExporting: Boolean = false,
-    val exportProgress: Float = 0f,
-    val zoomLevel: Float = 1f,
-    val bottomPanel: BottomPanel = BottomPanel.NONE,
-    val exportOutputPath: String? = null,
-    val lastError: String? = null,
-    val totalDurationUs: Long = 0L,
-    val statusMessage: String? = null
+data class EditorState(
+    val project: MographProject = MographProject(),
+    val selectedId: String? = null,
+    val playheadUs: Long = 0L,
+    val playing: Boolean = false,
+    val pxPerSecond: Float = 80f,
+    val tab: Int = 0,
+    val motionBpm: Float = 120f,
+    val motionIntensity: Float = 0.7f,
+    val message: String? = null
 )
 
-enum class BottomPanel {
-    NONE, EFFECTS, COLOR, TRANSFORM, TEXT, TRANSITION, AUDIO, SPEED, EXPORT
-}
-
+/** Owns the open project. All edits go through [mutate] so every change is saved. */
 class EditorViewModel(app: Application) : AndroidViewModel(app) {
 
-    private val _uiState = MutableStateFlow(EditorUiState())
-    val uiState: StateFlow<EditorUiState> = _uiState
+    private val store = ProjectStore(app)
+    private val io = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val _state = MutableStateFlow(EditorState())
+    val state: StateFlow<EditorState> = _state.asStateFlow()
+    val export: StateFlow<ExportState> = ExportService.state
 
-    private val _isVip = MutableStateFlow(false)
-    val isVip: StateFlow<Boolean> = _isVip
+    private var saveJob: Job? = null
+    private var playJob: Job? = null
 
-    val username: String = "MotionKraft User"
+    // ---- project lifecycle ----
 
-    fun setVip(v: Boolean) { _isVip.value = v }
-
-    private var playbackJob: Job? = null
-
-    init {
-        pollPendingImport()
+    fun createProject(width: Int, height: Int): String {
+        val project = MographProject(exportSettings = ExportSettings(width = width, height = height))
+        _state.value = EditorState(project = project)
+        scheduleSave()
+        return project.id
     }
 
-    private fun pollPendingImport() {
-        viewModelScope.launch {
-            while (isActive) {
-                val pending = getApplication<MotionKraftApp>().pendingImport
-                if (pending != null) {
-                    getApplication<MotionKraftApp>().pendingImport = null
-                    if (pending.isVideo) importVideo(pending.path, pending.durationUs)
-                    else importImage(pending.path)
-                }
-                delay(300)
+    fun open(id: String) {
+        if (_state.value.project.id == id) return
+        flush()
+        io.launch {
+            val loaded = store.load(id) ?: return@launch
+            _state.value = EditorState(project = loaded)
+        }
+    }
+
+    /** Writes the current project now, not after the debounce delay. */
+    fun flush() {
+        saveJob?.cancel()
+        saveJob = null
+        val snapshot = _state.value.project
+        io.launch { store.save(snapshot) }
+    }
+
+    override fun onCleared() {
+        playJob?.cancel()
+        flush()
+        super.onCleared()
+    }
+
+    private fun scheduleSave() {
+        val snapshot = _state.value.project
+        saveJob?.cancel()
+        saveJob = io.launch {
+            delay(400)
+            store.save(snapshot)
+        }
+    }
+
+    private fun mutate(block: (Timeline) -> Timeline) {
+        _state.update { s ->
+            s.copy(project = s.project.copy(timeline = block(s.project.timeline), modifiedAt = System.currentTimeMillis()))
+        }
+        scheduleSave()
+    }
+
+    private fun mutateClip(id: String, block: (VideoClip) -> VideoClip) {
+        mutate { t -> t.clip(id)?.let { t.replace(block(it)) } ?: t }
+    }
+
+    private fun selectedClip(): VideoClip? {
+        val s = _state.value
+        return s.selectedId?.let { s.project.timeline.clip(it) }
+    }
+
+    private fun updateSelected(block: (VideoClip) -> VideoClip) {
+        val id = _state.value.selectedId ?: return
+        mutateClip(id, block)
+    }
+
+    fun consumeMessage() = _state.update { it.copy(message = null) }
+
+    private fun say(text: String) = _state.update { it.copy(message = text) }
+
+    // ---- media and text ----
+
+    fun importMedia(uri: Uri, video: Boolean) {
+        io.launch {
+            val media = MediaImporter.import(getApplication(), uri, video)
+            if (media == null) {
+                say(getApplication<Application>().getString(R.string.import_failed))
+                return@launch
             }
+            val clip = VideoClip(
+                type = if (media.isVideo) ClipType.VIDEO else ClipType.IMAGE,
+                filePath = media.path,
+                hasAudio = media.hasAudio,
+                startTimeUs = _state.value.project.timeline.endOfTrack(0),
+                lengthUs = media.durationUs,
+                track = 0
+            )
+            mutate { it.add(clip) }
+            _state.update { it.copy(selectedId = clip.id) }
         }
     }
 
-    fun importVideo(filePath: String, durationUs: Long) {
-        val timeline = _uiState.value.project.timeline
-        val lastEnd = timeline.clips.filter { it.type == ClipType.VIDEO || it.type == ClipType.IMAGE }
-            .maxOfOrNull { it.endTimeUs } ?: 0L
-        val track = if (timeline.clips.isEmpty()) 0 else (timeline.clips.maxOf { it.track } + 1)
-        val clip = VideoClip(
-            type = ClipType.VIDEO,
-            filePath = filePath,
-            startTimeUs = lastEnd,
-            endTimeUs = lastEnd + durationUs,
-            track = track
-        )
-        timeline.addClip(clip)
-        recalcDuration()
-        _uiState.update {
-            it.copy(selectedClipId = clip.id, statusMessage = "Video added (${durationUs / 1_000_000}s)")
-        }
-        clearStatusAfterDelay()
-    }
-
-    fun importImage(filePath: String) {
-        val timeline = _uiState.value.project.timeline
-        val lastEnd = timeline.clips.maxOfOrNull { it.endTimeUs } ?: 0L
-        val duration = 3_000_000L
-        val track = if (timeline.clips.isEmpty()) 0 else (timeline.clips.maxOf { it.track } + 1)
-        val clip = VideoClip(
-            type = ClipType.IMAGE,
-            filePath = filePath,
-            startTimeUs = lastEnd,
-            endTimeUs = lastEnd + duration,
-            track = track
-        )
-        timeline.addClip(clip)
-        recalcDuration()
-        _uiState.update { it.copy(selectedClipId = clip.id, statusMessage = "Image added") }
-        clearStatusAfterDelay()
-    }
-
-    fun addTextLayer(text: String) {
-        val timeline = _uiState.value.project.timeline
-        val playhead = _uiState.value.currentPlayheadUs
-        val duration = 3_000_000L
-        val track = (timeline.clips.maxOfOrNull { it.track } ?: -1) + 1
+    fun addText(text: String) {
+        val s = _state.value
+        val track = (s.project.timeline.clips.maxOfOrNull { it.track } ?: 0) + 1
         val clip = VideoClip(
             type = ClipType.TEXT,
-            startTimeUs = playhead,
-            endTimeUs = playhead + duration,
-            track = track,
-            textContent = text,
-            fontSize = 64f
+            text = text.ifBlank { "Text" },
+            startTimeUs = s.playheadUs,
+            lengthUs = 3_000_000L,
+            track = track
         )
-        timeline.addClip(clip)
-        recalcDuration()
-        _uiState.update { it.copy(selectedClipId = clip.id, bottomPanel = BottomPanel.NONE, statusMessage = "Text added") }
-        clearStatusAfterDelay()
+        mutate { it.add(clip) }
+        _state.update { it.copy(selectedId = clip.id) }
     }
 
-    fun updatePlayhead(timeUs: Long) {
-        val total = _uiState.value.totalDurationUs.coerceAtLeast(1000L)
-        _uiState.update { it.copy(currentPlayheadUs = timeUs.coerceIn(0, total)) }
+    // ---- transport ----
+
+    fun seek(timeUs: Long) {
+        _state.update { it.copy(playheadUs = timeUs.coerceIn(0L, it.project.timeline.durationUs)) }
     }
 
     fun togglePlay() {
-        val playing = !_uiState.value.isPlaying
-        _uiState.update { it.copy(isPlaying = playing) }
-        if (playing) startPlayback() else stopPlayback()
+        if (_state.value.playing) stopPlayback() else startPlayback()
     }
 
     private fun startPlayback() {
-        playbackJob?.cancel()
-        playbackJob = viewModelScope.launch {
-            val start = _uiState.value.currentPlayheadUs
-            val startWall = System.currentTimeMillis()
-            while (isActive && _uiState.value.isPlaying) {
-                val elapsed = (System.currentTimeMillis() - startWall) * 1000L
-                var pos = (start + elapsed)
-                val total = _uiState.value.totalDurationUs
-                if (pos >= total) {
-                    pos = 0
-                    _uiState.update { it.copy(currentPlayheadUs = 0) }
+        playJob?.cancel()
+        _state.update { it.copy(playing = true) }
+        playJob = viewModelScope.launch {
+            var last = System.nanoTime()
+            while (isActive) {
+                delay(33)
+                val now = System.nanoTime()
+                val stepUs = (now - last) / 1_000L
+                last = now
+                val s = _state.value
+                val next = s.playheadUs + stepUs
+                if (next >= s.project.timeline.durationUs) {
+                    _state.update { it.copy(playheadUs = 0L, playing = false) }
                     break
                 }
-                _uiState.update { it.copy(currentPlayheadUs = pos) }
-                delay(33) // ~30fps UI update
+                _state.update { it.copy(playheadUs = next) }
             }
         }
     }
 
     private fun stopPlayback() {
-        playbackJob?.cancel()
-        playbackJob = null
+        playJob?.cancel()
+        playJob = null
+        _state.update { it.copy(playing = false) }
     }
 
-    fun selectClip(clipId: String?) = _uiState.update { it.copy(selectedClipId = clipId) }
+    // ---- selection and view ----
 
-    fun setBottomPanel(panel: BottomPanel) {
-        _uiState.update {
-            it.copy(bottomPanel = if (it.bottomPanel == panel) BottomPanel.NONE else panel)
+    fun select(id: String?) = _state.update { it.copy(selectedId = id) }
+
+    fun setTab(index: Int) = _state.update { it.copy(tab = index) }
+
+    fun setZoom(pxPerSecond: Float) = _state.update { it.copy(pxPerSecond = pxPerSecond.coerceIn(30f, 240f)) }
+
+    fun setMotionBpm(bpm: Float) = _state.update { it.copy(motionBpm = bpm) }
+
+    fun setMotionIntensity(v: Float) = _state.update { it.copy(motionIntensity = v) }
+
+    // ---- clip editing ----
+
+    fun moveClip(id: String, deltaUs: Long) {
+        mutateClip(id) { it.copy(startTimeUs = (it.startTimeUs + deltaUs).coerceAtLeast(0L)) }
+    }
+
+    fun setSpeed(speed: Float) {
+        updateSelected { c ->
+            val sourceUs = c.lengthUs * c.speed
+            c.copy(speed = speed, lengthUs = (sourceUs / speed).toLong().coerceAtLeast(100_000L))
         }
     }
 
-    fun applyJedagJedug(presetId: String, bpm: Float = 120f, intensity: Float = 0.7f) {
-        val state = _uiState.value
-        val clip = state.selectedClipId?.let { state.project.timeline.getClipById(it) } ?: return
-        JedagJedugApplier.applyPreset(clip, presetId, bpm, intensity)
-        _uiState.update { it.copy(project = it.project.copy(modifiedAt = System.currentTimeMillis()),
-            statusMessage = "Effect applied") }
-        clearStatusAfterDelay()
+    fun split() {
+        val c = selectedClip() ?: return
+        val cut = _state.value.playheadUs
+        if (cut <= c.startTimeUs + 100_000L || cut >= c.endTimeUs - 100_000L) {
+            say(getApplication<Application>().getString(R.string.move_playhead))
+            return
+        }
+        val leftUs = cut - c.startTimeUs
+        val right = c.copy(
+            id = UUID.randomUUID().toString(),
+            startTimeUs = cut,
+            lengthUs = c.endTimeUs - cut,
+            sourceStartUs = c.sourceStartUs + (leftUs * c.speed).toLong(),
+            transform = shiftTransform(c.transform, leftUs)
+        )
+        mutate { t -> t.replace(c.copy(lengthUs = leftUs)).add(right) }
+        _state.update { it.copy(selectedId = right.id) }
     }
 
-    fun deleteSelectedClip() {
-        val id = _uiState.value.selectedClipId ?: return
-        _uiState.value.project.timeline.removeClip(id)
-        recalcDuration()
-        _uiState.update { it.copy(selectedClipId = null, statusMessage = "Clip deleted") }
-        clearStatusAfterDelay()
+    fun duplicate() {
+        val c = selectedClip() ?: return
+        val copy = c.copy(id = UUID.randomUUID().toString(), startTimeUs = c.endTimeUs)
+        mutate { it.add(copy) }
+        _state.update { it.copy(selectedId = copy.id) }
     }
 
-    fun setClipSpeed(speed: Float) {
-        val state = _uiState.value
-        val clip = state.selectedClipId?.let { state.project.timeline.getClipById(it) } ?: return
-        val newDuration = (clip.durationUs * clip.speed / speed).toLong()
-        state.project.timeline.clips.remove(clip)
-        state.project.timeline.clips.add(clip.copy(speed = speed, endTimeUs = clip.startTimeUs + newDuration))
-        recalcDuration()
-        _uiState.update { it.copy(project = it.project.copy(modifiedAt = System.currentTimeMillis())) }
+    fun deleteSelected() {
+        val id = _state.value.selectedId ?: return
+        mutate { it.remove(id) }
+        _state.update { it.copy(selectedId = null) }
     }
 
-    fun adjustColor(brightness: Float? = null, contrast: Float? = null, saturation: Float? = null) {
-        val state = _uiState.value
-        val clip = state.selectedClipId?.let { state.project.timeline.getClipById(it) } ?: return
-        state.project.timeline.clips.remove(clip)
-        state.project.timeline.clips.add(clip.copy(
-            brightness = brightness ?: clip.brightness,
-            contrast = contrast ?: clip.contrast,
-            saturation = saturation ?: clip.saturation
-        ))
-        _uiState.update { it.copy(project = it.project.copy(modifiedAt = System.currentTimeMillis())) }
+    fun setTransform(property: TransformProperty, value: Float) {
+        updateSelected { it.copy(transform = it.transform.withConstant(property, value)) }
     }
 
-    fun updateExportSettings(
-        width: Int? = null, height: Int? = null, fps: Int? = null,
-        bitrate: Long? = null, qualityPreset: String? = null
-    ) {
-        val proj = _uiState.value.project
-        val ex = proj.exportSettings
-        _uiState.update {
-            it.copy(project = proj.copy(
-                exportSettings = ex.copy(
-                    width = width ?: ex.width,
-                    height = height ?: ex.height,
-                    fps = fps ?: ex.fps,
-                    bitrate = bitrate ?: ex.bitrate,
-                    qualityPreset = qualityPreset ?: ex.qualityPreset
-                ),
-                modifiedAt = System.currentTimeMillis()
-            ))
+    fun setUniformScale(value: Float) {
+        updateSelected {
+            it.copy(transform = it.transform
+                .withConstant(TransformProperty.SCALE_X, value)
+                .withConstant(TransformProperty.SCALE_Y, value))
         }
     }
 
-    fun applyZoom(factor: Float) {
-        val current = _uiState.value.zoomLevel
-        val newZoom = (current * factor).coerceIn(0.25f, 8f)
-        _uiState.update { it.copy(zoomLevel = newZoom) }
+    fun setColor(brightness: Float? = null, contrast: Float? = null, saturation: Float? = null) {
+        updateSelected {
+            it.copy(
+                brightness = brightness ?: it.brightness,
+                contrast = contrast ?: it.contrast,
+                saturation = saturation ?: it.saturation
+            )
+        }
     }
 
-    fun moveClipStart(clipId: String, deltaUs: Long) {
-        val clip = _uiState.value.project.timeline.getClipById(clipId) ?: return
-        val ns = (clip.startTimeUs + deltaUs).coerceAtLeast(0)
-        val dur = clip.durationUs
-        _uiState.value.project.timeline.clips.remove(clip)
-        _uiState.value.project.timeline.clips.add(clip.copy(startTimeUs = ns, endTimeUs = ns + dur))
-        recalcDuration()
-        _uiState.update { it.copy(project = it.project.copy(modifiedAt = System.currentTimeMillis())) }
-    }
+    fun setVolume(volume: Float) = updateSelected { it.copy(volume = volume) }
 
-    fun splitAtPlayhead() {
-        val state = _uiState.value
-        val ph = state.currentPlayheadUs
-        val clip = state.project.timeline.clips
-            .filter { ph in it.startTimeUs until it.endTimeUs }
-            .maxByOrNull { it.track } ?: return
-        val cutPoint = ph
-        val oldEnd = clip.endTimeUs
-        state.project.timeline.clips.remove(clip)
-        state.project.timeline.clips.add(clip.copy(endTimeUs = cutPoint))
-        state.project.timeline.clips.add(clip.copy(
-            startTimeUs = cutPoint,
-            endTimeUs = oldEnd,
-            trimStartUs = clip.trimStartUs + (cutPoint - clip.startTimeUs)
-        ))
-        recalcDuration()
-        _uiState.update { it.copy(statusMessage = "Split at playhead") }
-        clearStatusAfterDelay()
-    }
-
-    fun exportVideo() {
-        viewModelScope.launch {
-            _uiState.update { it.copy(isExporting = true, exportProgress = 0f, lastError = null) }
-            val project = _uiState.value.project
-            val ctx = getApplication<Application>()
-
-            val moviesDir = File(ctx.getExternalFilesDir(Environment.DIRECTORY_MOVIES), "MotionKraft")
-            if (!moviesDir.exists()) moviesDir.mkdirs()
-            val outFile = File(moviesDir, "${project.name.replace(" ","_")}_${System.currentTimeMillis()}.mp4")
-
-            val cmd = FFmpegCommandBuilder.buildCommand(project, outFile.absolutePath)
-            val cmdStr = cmd.joinToString(" ")
-
-            val result = withContext(Dispatchers.IO) {
-                kotlinx.coroutines.suspendCancellableCoroutine<ReturnCode?> { cont ->
-                    val session = FFmpegKit.executeAsync(cmdStr, { session ->
-                        cont.resume(session.returnCode, {})
-                    }, { }, { statistics ->
-                        val time = statistics.time.toFloat()
-                        val total = project.timeline.getTotalDuration() / 1000f
-                        if (total > 0f) {
-                            _uiState.update { it.copy(exportProgress = (time / total).coerceIn(0f, 1f)) }
-                        }
-                    })
-                    cont.invokeOnCancellation { session?.cancel() }
-                }
-            }
-
-            if (result != null && result.isValueSuccess) {
-                try {
-                    val values = ContentValues().apply {
-                        put(MediaStore.Video.Media.DISPLAY_NAME, outFile.name)
-                        put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
-                        put(MediaStore.Video.Media.DATA, outFile.absolutePath)
-                        put(MediaStore.Video.Media.DURATION, project.timeline.getTotalDuration() / 1000)
-                    }
-                    ctx.contentResolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values)
-                } catch (_: Exception) { }
-                _uiState.update {
-                    it.copy(isExporting = false, exportProgress = 1f, exportOutputPath = outFile.absolutePath)
-                }
+    fun toggleEffect(effectId: String) {
+        updateSelected { c ->
+            val present = c.effects.any { it.effectId == effectId }
+            c.copy(effects = if (present) {
+                c.effects.filterNot { it.effectId == effectId }
             } else {
-                _uiState.update {
-                    it.copy(isExporting = false, lastError = "Export failed (code ${result?.toString()}).")
-                }
-            }
+                c.effects + EffectInstance(effectId)
+            })
         }
     }
 
-    fun dismissError() = _uiState.update { it.copy(lastError = null) }
-    fun dismissExportResult() = _uiState.update { it.copy(exportOutputPath = null) }
-
-    private fun recalcDuration() {
-        val total = _uiState.value.project.timeline.getTotalDuration().coerceAtLeast(2_000_000L)
-        _uiState.update { it.copy(totalDurationUs = total,
-            project = it.project.copy(timeline = it.project.timeline.also { t -> t.durationUs = total })
-        )}
+    fun setEffectParam(effectId: String, param: String, value: Float) {
+        updateSelected { c ->
+            c.copy(effects = c.effects.map {
+                if (it.effectId == effectId) it.copy(params = it.params + (param to value)) else it
+            })
+        }
     }
 
-    private fun clearStatusAfterDelay() {
-        Handler(Looper.getMainLooper()).postDelayed({
-            _uiState.update { it.copy(statusMessage = null) }
-        }, 1800)
+    fun applyPreset(presetId: String) {
+        val s = _state.value
+        val c = selectedClip() ?: return
+        val result = JedagJedugApplier.build(presetId, c.lengthUs, s.motionBpm, s.motionIntensity)
+        mutateClip(c.id) { clip ->
+            clip.copy(
+                transform = result.transform,
+                effects = clip.effects.filterNot { it.effectId == EffectIds.GLITCH } + result.effects
+            )
+        }
     }
 
-    override fun onCleared() {
-        super.onCleared()
-        stopPlayback()
+    fun resetMotion() {
+        updateSelected { clip ->
+            clip.copy(
+                transform = Transform(),
+                effects = clip.effects.filterNot { it.effectId == EffectIds.GLITCH }
+            )
+        }
+    }
+
+    fun setText(text: String) = updateSelected { it.copy(text = text) }
+
+    fun setFontSize(size: Float) = updateSelected { it.copy(fontSize = size) }
+
+    fun setStrokeWidth(width: Float) = updateSelected { it.copy(strokeWidth = width) }
+
+    fun setTextColor(argb: Int) = updateSelected { it.copy(textColor = argb) }
+
+    // ---- export ----
+
+    fun export() {
+        if (ExportService.state.value.running) return
+        val project = _state.value.project
+        if (project.timeline.clips.isEmpty()) {
+            say(getApplication<Application>().getString(R.string.need_clip))
+            return
+        }
+        flush()
+        io.launch {
+            val app = getApplication<Application>()
+            val stamp = System.currentTimeMillis()
+            val output = File(app.cacheDir, "export_$stamp.mp4").absolutePath
+            val args = FFmpegCommandBuilder.build(
+                project = project,
+                outputPath = output,
+                textFileFor = { clip -> writeTextFile(clip) },
+                fontPath = resolveFont()
+            )
+            ExportService.start(app, args, output, "MotionKraft_$stamp.mp4", project.timeline.durationUs)
+        }
+    }
+
+    fun acknowledgeExport() = ExportService.acknowledge()
+
+    private fun writeTextFile(clip: VideoClip): String {
+        val file = File(getApplication<Application>().cacheDir, "text_${clip.id}.txt")
+        file.writeText(clip.text)
+        return file.absolutePath
+    }
+
+    private fun resolveFont(): String =
+        listOf("/system/fonts/Roboto-Regular.ttf", "/system/fonts/DroidSans.ttf")
+            .firstOrNull { File(it).exists() } ?: FFmpegCommandBuilder.DEFAULT_FONT
+
+    private fun shiftTransform(t: Transform, by: Long): Transform = t.copy(
+        positionX = shiftKeys(t.positionX, by),
+        positionY = shiftKeys(t.positionY, by),
+        scaleX = shiftKeys(t.scaleX, by),
+        scaleY = shiftKeys(t.scaleY, by),
+        rotation = shiftKeys(t.rotation, by),
+        opacity = shiftKeys(t.opacity, by)
+    )
+
+    /** Moves keyframes so they stay in place relative to the clip start after a split. */
+    private fun shiftKeys(keys: List<Keyframe>, by: Long): List<Keyframe> {
+        val sampled = Transform.sample(keys, by)
+        val kept = keys.filter { it.timeUs > by }
+            .map { Keyframe(it.timeUs - by, it.value, it.interpolation) }
+        return if (kept.isEmpty()) listOf(Keyframe(0L, sampled)) else listOf(Keyframe(0L, sampled)) + kept
     }
 }

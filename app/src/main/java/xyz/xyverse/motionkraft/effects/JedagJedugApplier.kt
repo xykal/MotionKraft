@@ -1,177 +1,124 @@
 package xyz.xyverse.motionkraft.effects
 
 import xyz.xyverse.motionkraft.data.model.*
-import kotlin.math.PI
-import kotlin.math.sin
+import kotlin.math.max
+import kotlin.math.min
 import kotlin.random.Random
 
 /**
- * Menerapkan preset jedag jedug ke clip: mengenerate keyframe otomatis
- * berdasarkan beat/BPM yang diinginkan.
- *
- * Semua animasi ditulis sebagai keyframe agar bisa diedit kembali di curve editor,
- * sama seperti Alight Motion / After Effects.
+ * Builds keyframes for beat-synced presets. Times are relative to the clip start.
+ * Pure data in, pure data out: the caller stores the result.
  */
 object JedagJedugApplier {
 
-    private data class KeyBuilder(
-        val scaleX: MutableList<Keyframe> = mutableListOf(),
-        val scaleY: MutableList<Keyframe> = mutableListOf(),
-        val posX: MutableList<Keyframe> = mutableListOf(),
-        val posY: MutableList<Keyframe> = mutableListOf(),
-        val rot: MutableList<Keyframe> = mutableListOf(),
-        val op: MutableList<Keyframe> = mutableListOf()
-    )
+    data class Result(val transform: Transform, val effects: List<EffectInstance>)
 
-    fun applyPreset(clip: VideoClip, presetId: String, bpm: Float = 120f, intensity: Float = 0.5f) {
-        val b = KeyBuilder()
+    fun build(presetId: String, durationUs: Long, bpm: Float, intensity: Float): Result {
+        val dur = max(durationUs, 1_000L)
+        val beat = (60_000_000f / bpm.coerceIn(40f, 220f)).toLong()
+        val i = intensity.coerceIn(0f, 1f)
+        val k = Keys()
+        var effects: List<EffectInstance> = emptyList()
         when (presetId) {
-            JedagJedugPresets.ZOOM_PUNCH.first -> buildZoomPunch(b, clip.durationUs, bpm, intensity)
-            JedagJedugPresets.HEAVY_SHAKE.first -> buildHeavyShake(b, clip.durationUs, bpm, intensity)
-            JedagJedugPresets.STROBE_FLASH.first -> buildStrobe(b, clip.durationUs, bpm, intensity)
-            JedagJedugPresets.WHIP_PAN.first -> buildWhipPan(b, clip.durationUs)
-            JedagJedugPresets.SPIN_360.first -> buildSpin(b, clip.durationUs, intensity)
-            JedagJedugPresets.PULSE.first -> buildPulse(b, clip.durationUs, bpm, intensity)
-            JedagJedugPresets.EARTHQUAKE.first -> buildQuake(b, clip.durationUs, bpm, intensity)
-            JedagJedugPresets.GLITCH_RGB.first -> {
-                clip.effects.add(
-                    EffectInstance(
-                        effectId = JedagJedugPresets.GLITCH_RGB.first,
-                        params = mutableMapOf("intensity" to intensity * 30f)
-                    )
-                )
+            JjPresets.ZOOM_PUNCH -> punch(k, dur, beat, 1f + 0.15f + i * 0.4f)
+            JjPresets.HEAVY_SHAKE -> shake(k, dur, beat, i)
+            JjPresets.PULSE -> pulse(k, dur, beat, 1f + i * 0.2f)
+            JjPresets.QUAKE -> {
+                shake(k, dur, beat, i * 0.6f)
+                punch(k, dur, beat, 1f + i * 0.2f)
             }
+            JjPresets.WHIP_PAN -> whip(k, dur)
+            JjPresets.SPIN -> spin(k, dur, i)
+            JjPresets.GLITCH_RGB ->
+                effects = listOf(EffectInstance(EffectIds.GLITCH, params = mapOf("intensity" to 40f * i)))
         }
-        applyKeysToClip(clip, b)
+        return Result(k.toTransform(), effects)
     }
 
-    private fun beatIntervalUs(bpm: Float): Long = (60_000_000f / bpm).toLong()
+    private class Keys {
+        val sx = ArrayList<Keyframe>()
+        val sy = ArrayList<Keyframe>()
+        val px = ArrayList<Keyframe>()
+        val py = ArrayList<Keyframe>()
+        val rot = ArrayList<Keyframe>()
 
-    private fun applyKeysToClip(clip: VideoClip, b: KeyBuilder) {
-        // Ganti keyframe transform dengan yang baru dibangun.
-        // Karena keyframe bersifat aditif, kita reset property yang dibangun preset,
-        // dan mempertahankan property lain yang sudah ada.
-        clip.transform = clip.transform.copy(
-            scaleX = if (b.scaleX.isNotEmpty()) b.scaleX.toList() else clip.transform.scaleX,
-            scaleY = if (b.scaleY.isNotEmpty()) b.scaleY.toList() else clip.transform.scaleY,
-            positionX = if (b.posX.isNotEmpty()) b.posX.toList() else clip.transform.positionX,
-            positionY = if (b.posY.isNotEmpty()) b.posY.toList() else clip.transform.positionY,
-            rotation = if (b.rot.isNotEmpty()) b.rot.toList() else clip.transform.rotation,
-            opacity = if (b.op.isNotEmpty()) b.op.toList() else clip.transform.opacity
+        fun toTransform() = Transform(
+            positionX = if (px.isEmpty()) Transform.constant(0f) else px.toList(),
+            positionY = if (py.isEmpty()) Transform.constant(0f) else py.toList(),
+            scaleX = if (sx.isEmpty()) Transform.constant(1f) else sx.toList(),
+            scaleY = if (sy.isEmpty()) Transform.constant(1f) else sy.toList(),
+            rotation = if (rot.isEmpty()) Transform.constant(0f) else rot.toList()
         )
     }
 
-    // ========== PRESET BUILDERS ==========
-
-    private fun buildZoomPunch(b: KeyBuilder, dur: Long, bpm: Float, intensity: Float) {
-        val interval = beatIntervalUs(bpm)
-        val zoomPeak = 1f + 0.15f + intensity * 0.4f
+    private fun punch(k: Keys, dur: Long, beat: Long, peak: Float) {
+        val step = max(beat, 1L)
         var t = 0L
         while (t < dur) {
-            b.scaleX.add(Keyframe(t, 1f, Interpolation.LINEAR))
-            b.scaleY.add(Keyframe(t, 1f, Interpolation.LINEAR))
-            val punchTime = (t + interval / 6).coerceAtMost(dur)
-            b.scaleX.add(Keyframe(punchTime, zoomPeak, Interpolation.EASE_OUT))
-            b.scaleY.add(Keyframe(punchTime, zoomPeak, Interpolation.EASE_OUT))
-            val settleTime = (t + interval / 2).coerceAtMost(dur)
-            b.scaleX.add(Keyframe(settleTime, 1f, Interpolation.EASE_IN_OUT))
-            b.scaleY.add(Keyframe(settleTime, 1f, Interpolation.EASE_IN_OUT))
-            t += interval
+            val up = min(t + step / 6, dur)
+            val down = min(t + step / 2, dur)
+            for (list in listOf(k.sx, k.sy)) {
+                list += Keyframe(t, 1f, Interpolation.LINEAR)
+                list += Keyframe(up, peak, Interpolation.EASE_OUT)
+                list += Keyframe(down, 1f, Interpolation.EASE_IN_OUT)
+            }
+            t += step
         }
-        b.scaleX.add(Keyframe(dur, 1f))
-        b.scaleY.add(Keyframe(dur, 1f))
+        k.sx += Keyframe(dur, 1f)
+        k.sy += Keyframe(dur, 1f)
     }
 
-    private fun buildHeavyShake(b: KeyBuilder, dur: Long, bpm: Float, intensity: Float) {
-        val stepsPerBeat = 8
-        val interval = beatIntervalUs(bpm) / stepsPerBeat
-        val shake = 20f + intensity * 60f
-        val rotAmt = 2f + intensity * 6f
+    private fun pulse(k: Keys, dur: Long, beat: Long, peak: Float) {
+        val step = max(beat, 1L)
         var t = 0L
         while (t < dur) {
-            b.posX.add(Keyframe(t, Random.nextFloat() * shake * 2 - shake))
-            b.posY.add(Keyframe(t, Random.nextFloat() * shake * 2 - shake))
-            b.rot.add(Keyframe(t, Random.nextFloat() * rotAmt * 2 - rotAmt))
-            t += interval
+            val mid = min(t + step / 2, dur)
+            for (list in listOf(k.sx, k.sy)) {
+                list += Keyframe(t, 1f, Interpolation.LINEAR)
+                list += Keyframe(mid, peak, Interpolation.EASE_IN_OUT)
+            }
+            t += step
         }
-        b.posX.add(Keyframe(dur, 0f))
-        b.posY.add(Keyframe(dur, 0f))
-        b.rot.add(Keyframe(dur, 0f))
+        k.sx += Keyframe(dur, 1f)
+        k.sy += Keyframe(dur, 1f)
     }
 
-    private fun buildStrobe(b: KeyBuilder, dur: Long, bpm: Float, intensity: Float) {
-        val interval = beatIntervalUs(bpm) / 2
-        val dark = 1f - intensity * 0.8f
-        var t = 0L
-        var bright = true
-        while (t < dur) {
-            b.op.add(Keyframe(t, if (bright) 1f else dark, Interpolation.LINEAR))
-            bright = !bright
-            t += interval
-        }
-        b.op.add(Keyframe(dur, 1f))
-    }
-
-    private fun buildWhipPan(b: KeyBuilder, dur: Long) {
-        val whipDur = minOf(400_000L, dur / 3)
-        // Mulai dari luar layar kiri, masuk ke tengah dengan ease out
-        b.posX.add(Keyframe(0L, -1500f, Interpolation.EASE_OUT))
-        b.posY.add(Keyframe(0L, 0f))
-        b.posX.add(Keyframe(whipDur, 0f, Interpolation.EASE_OUT))
-        b.posY.add(Keyframe(whipDur, 0f))
-        b.scaleX.add(Keyframe(0L, 1.5f))
-        b.scaleY.add(Keyframe(0L, 1.5f))
-        b.scaleX.add(Keyframe(whipDur, 1f, Interpolation.EASE_OUT))
-        b.scaleY.add(Keyframe(whipDur, 1f, Interpolation.EASE_OUT))
-        b.rot.add(Keyframe(0L, -15f, Interpolation.EASE_OUT))
-        b.rot.add(Keyframe(whipDur, 0f, Interpolation.EASE_OUT))
-    }
-
-    private fun buildSpin(b: KeyBuilder, dur: Long, intensity: Float) {
-        val speed = 0.5f + intensity * 2f // rotasi per detik
-        val totalRot = (dur / 1_000_000f) * 360f * speed
-        b.rot.add(Keyframe(0L, 0f, Interpolation.LINEAR))
-        b.rot.add(Keyframe(dur, totalRot % 360, Interpolation.LINEAR))
-        // scale boost
-        val sc = 1f + intensity * 0.3f
-        b.scaleX.add(Keyframe(0L, sc))
-        b.scaleY.add(Keyframe(0L, sc))
-        b.scaleX.add(Keyframe(dur, 1f, Interpolation.LINEAR))
-        b.scaleY.add(Keyframe(dur, 1f, Interpolation.LINEAR))
-    }
-
-    private fun buildPulse(b: KeyBuilder, dur: Long, bpm: Float, intensity: Float) {
-        val interval = beatIntervalUs(bpm)
-        val peak = 1f + intensity * 0.2f
+    private fun shake(k: Keys, dur: Long, beat: Long, i: Float) {
+        val step = max(beat / 8, 1L)
+        val amp = 20f + i * 60f
+        val rotAmp = 2f + i * 6f
         var t = 0L
         while (t < dur) {
-            b.scaleX.add(Keyframe(t, 1f, Interpolation.LINEAR))
-            b.scaleY.add(Keyframe(t, 1f, Interpolation.LINEAR))
-            val mid = (t + interval / 2).coerceAtMost(dur)
-            b.scaleX.add(Keyframe(mid, peak, Interpolation.EASE_IN_OUT))
-            b.scaleY.add(Keyframe(mid, peak, Interpolation.EASE_IN_OUT))
-            t += interval
+            k.px += Keyframe(t, Random.nextFloat() * amp * 2 - amp)
+            k.py += Keyframe(t, Random.nextFloat() * amp * 2 - amp)
+            k.rot += Keyframe(t, Random.nextFloat() * rotAmp * 2 - rotAmp)
+            t += step
         }
-        b.scaleX.add(Keyframe(dur, 1f))
-        b.scaleY.add(Keyframe(dur, 1f))
+        k.px += Keyframe(dur, 0f)
+        k.py += Keyframe(dur, 0f)
+        k.rot += Keyframe(dur, 0f)
     }
 
-    private fun buildQuake(b: KeyBuilder, dur: Long, bpm: Float, intensity: Float) {
-        // Quake = shake + sesekali zoom punch di beat
-        buildHeavyShake(b, dur, bpm, intensity * 0.6f)
-        val interval = beatIntervalUs(bpm)
-        val zoomPeak = 1f + intensity * 0.2f
-        var t = 0L
-        while (t < dur) {
-            b.scaleX.add(Keyframe(t, 1f, Interpolation.LINEAR))
-            b.scaleY.add(Keyframe(t, 1f, Interpolation.LINEAR))
-            val punch = (t + interval/6).coerceAtMost(dur)
-            b.scaleX.add(Keyframe(punch, zoomPeak, Interpolation.EASE_OUT))
-            b.scaleY.add(Keyframe(punch, zoomPeak, Interpolation.EASE_OUT))
-            val settle = (t + interval/2).coerceAtMost(dur)
-            b.scaleX.add(Keyframe(settle, 1f, Interpolation.EASE_IN_OUT))
-            b.scaleY.add(Keyframe(settle, 1f, Interpolation.EASE_IN_OUT))
-            t += interval
-        }
+    private fun whip(k: Keys, dur: Long) {
+        val whipUs = min(400_000L, dur / 3).coerceAtLeast(1L)
+        k.px += Keyframe(0L, -1500f, Interpolation.EASE_OUT)
+        k.px += Keyframe(whipUs, 0f)
+        k.rot += Keyframe(0L, -15f, Interpolation.EASE_OUT)
+        k.rot += Keyframe(whipUs, 0f)
+        k.sx += Keyframe(0L, 1.5f, Interpolation.EASE_OUT)
+        k.sx += Keyframe(whipUs, 1f)
+        k.sy += Keyframe(0L, 1.5f, Interpolation.EASE_OUT)
+        k.sy += Keyframe(whipUs, 1f)
+    }
+
+    private fun spin(k: Keys, dur: Long, i: Float) {
+        val turnsPerSec = 0.5f + i * 2f
+        k.rot += Keyframe(0L, 0f)
+        k.rot += Keyframe(dur, (dur / 1_000_000f) * 360f * turnsPerSec)
+        val boost = 1f + i * 0.3f
+        k.sx += Keyframe(0L, boost)
+        k.sx += Keyframe(dur, 1f)
+        k.sy += Keyframe(0L, boost)
+        k.sy += Keyframe(dur, 1f)
     }
 }

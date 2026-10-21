@@ -1,55 +1,35 @@
 package xyz.xyverse.motionkraft.data.model
 
-import android.net.Uri
+import java.util.UUID
 
 /**
- * Mewakili satu klip di timeline (video, gambar, atau text).
+ * One clip on the timeline. Times are microseconds. [startTimeUs] and [lengthUs] are
+ * timeline values; [sourceStartUs] is where playback starts inside the source file.
+ * The source covers [lengthUs] * speed of material.
  */
 data class VideoClip(
-    val id: String = java.util.UUID.randomUUID().toString(),
+    val id: String = UUID.randomUUID().toString(),
     val type: ClipType,
-    val sourceUri: Uri? = null,
     val filePath: String? = null,
-
-    // Waktu dalam timeline (microseconds)
-    var startTimeUs: Long,
-    var endTimeUs: Long,
-    val trimStartUs: Long = 0L,
-    val trimEndUs: Long = 0L,
-
-    // Layer track: 0 = paling bawah, makin besar makin di depan
+    val hasAudio: Boolean = false,
+    val startTimeUs: Long,
+    val lengthUs: Long,
+    val sourceStartUs: Long = 0L,
     val track: Int = 0,
-
-    // Transform & visual properties
-    var transform: Transform = Transform(),
-    val speed: Float = 1.0f,
-    val volume: Float = 1.0f,
-    val blendMode: BlendMode = BlendMode.NORMAL,
-
-    // Effects dan filter yang terpasang
-    val effects: MutableList<EffectInstance> = mutableListOf(),
-
-    // Color grading
+    val speed: Float = 1f,
+    val volume: Float = 1f,
+    val transform: Transform = Transform(),
     val brightness: Float = 0f,
     val contrast: Float = 1f,
     val saturation: Float = 1f,
-    val hue: Float = 0f,
-
-    // Khusus teks
-    val textContent: String = "",
+    val effects: List<EffectInstance> = emptyList(),
+    val text: String = "",
     val textColor: Int = 0xFFFFFFFF.toInt(),
-    val fontSize: Float = 48f,
-    val fontPath: String? = null,
     val strokeColor: Int = 0xFF000000.toInt(),
-    val strokeWidth: Float = 0f
+    val strokeWidth: Float = 0f,
+    val fontSize: Float = 72f
 ) {
-    val durationUs: Long get() = endTimeUs - startTimeUs
+    val endTimeUs: Long get() = startTimeUs + lengthUs
 }
 
-enum class ClipType {
-    VIDEO, IMAGE, TEXT, AUDIO, SHAPE
-}
-
-enum class BlendMode {
-    NORMAL, MULTIPLY, SCREEN, OVERLAY, ADD, DARKEN, LIGHTEN, DIFFERENCE
-}
+enum class ClipType { VIDEO, IMAGE, TEXT }

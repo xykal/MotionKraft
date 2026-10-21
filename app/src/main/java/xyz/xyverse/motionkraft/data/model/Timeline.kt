@@ -1,54 +1,44 @@
 package xyz.xyverse.motionkraft.data.model
 
-/**
- * Timeline proyek: berisi semua klip, audio, dan metadata.
- */
-data class Timeline(
-    var durationUs: Long = 10_000_000L, // 10 detik default
-    var fps: Int = 30,
-    var width: Int = 1080,
-    var height: Int = 1920, // Portrait 9:16 default untuk reels/TikTok
-    var backgroundColor: Int = 0xFF000000.toInt(),
-    val clips: MutableList<VideoClip> = mutableListOf()
-) {
-    fun getClipsAt(timeUs: Long): List<VideoClip> =
-        clips.filter { timeUs in it.startTimeUs until it.endTimeUs }.sortedBy { it.track }
+import java.util.UUID
 
-    fun getClipById(id: String): VideoClip? = clips.find { it.id == id }
+/** Clips on tracks. Track 0 is the bottom layer; higher tracks draw on top. */
+data class Timeline(val clips: List<VideoClip> = emptyList()) {
 
-    fun getTotalDuration(): Long {
-        if (clips.isEmpty()) return durationUs
-        return maxOf(durationUs, clips.maxOf { it.endTimeUs })
-    }
+    /** Project length in microseconds. Never shorter than [MIN_DURATION_US]. */
+    val durationUs: Long
+        get() = maxOf(MIN_DURATION_US, clips.maxOfOrNull { it.endTimeUs } ?: 0L)
 
-    fun addClip(clip: VideoClip) {
-        clips.add(clip)
-    }
+    fun clip(id: String): VideoClip? = clips.firstOrNull { it.id == id }
 
-    fun removeClip(clipId: String) {
-        clips.removeAll { it.id == clipId }
+    fun endOfTrack(track: Int): Long =
+        clips.filter { it.track == track }.maxOfOrNull { it.endTimeUs } ?: 0L
+
+    fun add(clip: VideoClip): Timeline = copy(clips = clips + clip)
+
+    fun replace(clip: VideoClip): Timeline =
+        copy(clips = clips.map { if (it.id == clip.id) clip else it })
+
+    fun remove(id: String): Timeline = copy(clips = clips.filterNot { it.id == id })
+
+    companion object {
+        const val MIN_DURATION_US = 5_000_000L
     }
 }
 
-/**
- * Proyek utuh yang bisa disave/load sebagai file json.
- */
-data class MographProject(
-    val version: Int = 1,
-    var name: String = "Untitled Project",
-    val createdAt: Long = System.currentTimeMillis(),
-    var modifiedAt: Long = System.currentTimeMillis(),
-    val timeline: Timeline = Timeline(),
-    val masterVolume: Float = 1.0f,
-    var exportSettings: ExportSettings = ExportSettings()
+data class ExportSettings(
+    val width: Int = 1080,
+    val height: Int = 1920,
+    val fps: Int = 30,
+    val bitrate: Long = 12_000_000L,
+    val preset: String = "medium"
 )
 
-data class ExportSettings(
-    var width: Int = 1080,
-    var height: Int = 1920,
-    var fps: Int = 30,
-    var bitrate: Long = 16_000_000, // 16 Mbps
-    var videoCodec: String = "h264",
-    var audioBitrate: Int = 192_000,
-    var qualityPreset: String = "medium" // ultrafast, fast, medium, slow
+data class MographProject(
+    val id: String = UUID.randomUUID().toString(),
+    val name: String = "",
+    val createdAt: Long = System.currentTimeMillis(),
+    val modifiedAt: Long = System.currentTimeMillis(),
+    val timeline: Timeline = Timeline(),
+    val exportSettings: ExportSettings = ExportSettings()
 )
